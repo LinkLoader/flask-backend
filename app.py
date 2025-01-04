@@ -48,7 +48,7 @@ def cleanup_remaining_files():
 
 @app.route('/')
 def home():
-    return 'Welcome to Instagram Downloader'
+    return 'Welcome to LinkLoader Downloader'
 
 @app.route('/download_video_insta', methods=['POST'])
 def download_video_insta():
