@@ -5,6 +5,7 @@ import os
 import time
 import threading
 import atexit
+import yt_dlp
 
 app = Flask(__name__)
 CORS(app)
@@ -21,6 +22,7 @@ def delayed_file_cleanup(filepath, delay=1):
             try:
                 if os.path.exists(filepath):
                     os.unlink(filepath)
+                    print(f"Successfully cleaned up file: {filepath}")
                 break
             except Exception as e:
                 print(f"Cleanup attempt failed ({retries} retries left): {e}")
@@ -40,6 +42,7 @@ def cleanup_remaining_files():
         try:
             if os.path.exists(filepath):
                 os.unlink(filepath)
+                print(f"Cleaned up remaining file: {filepath}")
         except Exception as e:
             print(f"Failed to clean up file {filepath}: {e}")
 
@@ -47,8 +50,8 @@ def cleanup_remaining_files():
 def home():
     return 'Welcome to Instagram Downloader'
 
-@app.route('/download_video', methods=['POST'])
-def download_video():
+@app.route('/download_video_insta', methods=['POST'])
+def download_video_insta():
     """API to download and return video data from Instagram reel."""
     data = request.get_json()
     url = data.get("url")
@@ -63,27 +66,26 @@ def download_video():
         if not os.path.exists(video_file):
             return jsonify({"error": "Video file not found"}), 500
 
-        response = send_file(
+        @after_this_request
+        def cleanup(response):
+            if video_file and os.path.exists(video_file):
+                delayed_file_cleanup(video_file)
+            return response
+
+        return send_file(
             video_file,
             as_attachment=True,
             download_name=f"{url.split('/')[-2]}.mp4",
             mimetype="video/mp4"
         )
 
-        @response.call_on_close
-        def cleanup_after_send():
-            if video_file:
-                delayed_file_cleanup(video_file)
-
-        return response
-
     except Exception as e:
         if video_file and os.path.exists(video_file):
             delayed_file_cleanup(video_file)
         return jsonify({"error": str(e)}), 500
 
-@app.route('/download_audio', methods=['POST'])
-def download_audio():
+@app.route('/download_audio_insta', methods=['POST'])
+def download_audio_insta():
     """API to extract and return audio data from Instagram reel."""
     data = request.get_json()
     url = data.get("url")
@@ -98,23 +100,111 @@ def download_audio():
         if not os.path.exists(audio_file):
             return jsonify({"error": "Audio file not found"}), 500
 
-        response = send_file(
+        @after_this_request
+        def cleanup(response):
+            if audio_file and os.path.exists(audio_file):
+                delayed_file_cleanup(audio_file)
+            return response
+
+        return send_file(
             audio_file,
             as_attachment=True,
             download_name=f"{url.split('/')[-2]}.mp3",
             mimetype="audio/mpeg"
         )
 
-        @response.call_on_close
-        def cleanup_after_send():
-            if audio_file:
-                delayed_file_cleanup(audio_file)
-
-        return response
-
     except Exception as e:
         if audio_file and os.path.exists(audio_file):
             delayed_file_cleanup(audio_file)
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/download_video', methods=['POST'])
+def download_video():
+    filename = None
+    try:
+        data = request.get_json()
+        url = data.get('url')
+
+        if not url:
+            return jsonify({"error": "URL is required"}), 400
+
+        ydl_opts = {
+            'format': 'best',
+            'outtmpl': 'downloads/%(title)s.%(ext)s',
+            'sanitize_filename': True,
+        }
+
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            filename = ydl.prepare_filename(info)
+
+        if not os.path.exists(filename):
+            return jsonify({"error": "Video file not found"}), 500
+
+        @after_this_request
+        def cleanup(response):
+            if filename and os.path.exists(filename):
+                delayed_file_cleanup(filename)
+            return response
+
+        return send_file(
+            filename,
+            as_attachment=True,
+            mimetype="video/mp4",
+            download_name=f"{info['title']}.mp4"
+        )
+
+    except Exception as e:
+        if filename and os.path.exists(filename):
+            delayed_file_cleanup(filename)
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/download_audio', methods=['POST'])
+def download_audio():
+    mp3_filename = None
+    try:
+        data = request.get_json()
+        url = data.get('url')
+
+        if not url:
+            return jsonify({"error": "URL is required"}), 400
+
+        ydl_opts = {
+            'format': 'bestaudio/best',
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '192',
+            }],
+            'outtmpl': 'downloads/%(title)s.%(ext)s',
+            'quiet': True,
+            'no_warnings': True,
+        }
+
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            info = ydl.extract_info(url, download=True)
+            original_filename = ydl.prepare_filename(info)
+            mp3_filename = original_filename.rsplit('.', 1)[0] + '.mp3'
+
+        if not os.path.exists(mp3_filename):
+            return jsonify({"error": "Audio file could not be created"}), 500
+
+        @after_this_request
+        def cleanup(response):
+            if mp3_filename and os.path.exists(mp3_filename):
+                delayed_file_cleanup(mp3_filename)
+            return response
+
+        return send_file(
+            mp3_filename,
+            as_attachment=True,
+            mimetype="audio/mpeg",
+            download_name=f"{info['title']}.mp3"
+        )
+
+    except Exception as e:
+        if mp3_filename and os.path.exists(mp3_filename):
+            delayed_file_cleanup(mp3_filename)
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':
