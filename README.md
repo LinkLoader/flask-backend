@@ -11,7 +11,7 @@ LinkLoader is a Flask-based backend API that allows users to download videos and
 Start by cloning the repository to your local machine:
 
 ```bash
-git clone [https://github.com/your-username/linkloader-backend.git](https://github.com/LinkLoader/flask-backend.git)
+git clone (https://github.com/LinkLoader/flask-backend.git)
 cd linkloader-backend
 
 - windows
