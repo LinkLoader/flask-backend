@@ -132,6 +132,7 @@ def download_video():
             'format': 'best',
             'outtmpl': 'downloads/%(title)s.%(ext)s',
             'sanitize_filename': True,
+            'cookies':'./cookies.txt',
         }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -171,6 +172,7 @@ def download_audio():
 
         ydl_opts = {
             'format': 'bestaudio/best',
+            'sanitize_filename': True,
             'postprocessors': [{
                 'key': 'FFmpegExtractAudio',
                 'preferredcodec': 'mp3',
